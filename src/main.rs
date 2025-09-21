@@ -12,6 +12,8 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
         .add_systems( Update ,select_tile)
+        .add_systems(Update, highlight_selected)
         .add_systems( Update,process_selection)
+        .add_systems(Update, cleanup_lines)
         .run();
 }

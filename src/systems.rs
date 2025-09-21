@@ -3,7 +3,11 @@ use bevy::{
     prelude::*,
 };
 
+use crate::components::ConnectionLine;
+use crate::components::LineTimer;
+use crate::components::Selected;
 use crate::components::Tile;
+
 use crate::resources::Board;
 
 const ROWS: usize = 7;
@@ -29,10 +33,10 @@ pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                         sprite: Sprite {
                             color: match kind {
                                 0 => Color::Srgba(YELLOW),
-                            1 => Color::Srgba(GREEN),
-                            2 => Color::Srgba(BLUE),
-                            3 => Color::Srgba(RED),
-                            _ => Color::Srgba(ORANGE),
+                                1 => Color::Srgba(GREEN),
+                                2 => Color::Srgba(BLUE),
+                                3 => Color::Srgba(RED),
+                                _ => Color::Srgba(ORANGE),
                             },
                             custom_size: Some(Vec2::splat(TILE_SIZE - 4.0)),
                             ..default()
@@ -47,7 +51,6 @@ pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         }
     }
     commands.insert_resource(board);
-    
 }
 
 #[derive(Resource, Default)]
@@ -73,12 +76,24 @@ pub fn select_tile(
                 for (entity, tile, transform) in q_tiles.iter() {
                     let tile_pos = transform.translation.truncate();
                     let half = TILE_SIZE / 2.0;
-                    if (world_pos.x > tile_pos.x - half
+                    if world_pos.x > tile_pos.x - half
                         && world_pos.x < tile_pos.x + half
                         && world_pos.y > tile_pos.y - half
-                        && world_pos.y < tile_pos.y + half)
+                        && world_pos.y < tile_pos.y + half
                     {
-                        selected.0.push(entity);
+                        if selected.0.len() == 2 {
+                            for e in selected.0.drain(..) {
+                                commands.entity(e).remove::<Selected>();
+                            }
+                        }
+
+                        if !selected.0.contains(&entity) {
+                            commands.entity(entity).insert(Selected);
+                            selected.0.push(entity);
+                        }
+
+                        // selected.0.push(entity);
+
                         if selected.0.len() == 1 {
                             commands.spawn(AudioBundle {
                                 source: asset_server.load("sounds/select.ogg"),
@@ -100,39 +115,54 @@ pub fn process_selection(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut selected: ResMut<SelectedTiles>,
-    q_tiles: Query<(Entity, &Tile)>,
+    q_tiles: Query<(Entity, &Tile, &Transform)>,
     mut board: ResMut<Board>,
 ) {
     if selected.0.len() == 2 {
         let e1 = selected.0[0];
         let e2 = selected.0[1];
 
-        let t1 = q_tiles.get(e1).unwrap().1;
-        let t2 = q_tiles.get(e2).unwrap().1;
+        let (entity1, t1, tf1) = q_tiles.get(e1).unwrap();
+        let (entity2, t2, tf2) = q_tiles.get(e2).unwrap();
 
-        if t1.kind == t2.kind && can_connect(&board, t1, t2) {
-            println!("Tiles can connect!");
-             commands.spawn(AudioBundle {
-                            source: asset_server.load("sounds/matched.ogg"),
-                            settings: PlaybackSettings::ONCE,
-                        });
-            commands.entity(e1).despawn();
-            commands.entity(e2).despawn();
-            board.cells[t1.row][t1.col] = None;
-            board.cells[t2.row][t2.col] = None;
+        // if t1.kind == t2.kind {
+            if t1.kind == t2.kind  &&let Some(path) = can_connect(&board, t1, t2) {
+                println!("Tiles connect!");
 
+                // draw full path
+                spawn_path(&mut commands, &path, 64.0); // tile_size = 64
+
+                commands.spawn(AudioBundle {
+                    source: asset_server.load("sounds/matched.ogg"),
+                    settings: PlaybackSettings::ONCE,
+                });
+
+                commands.entity(entity1).despawn();
+                commands.entity(entity2).despawn();
+                board.cells[t1.row][t1.col] = None;
+                board.cells[t2.row][t2.col] = None;
+            // }
         } else {
             println!("Tiles cannot connect");
+            commands.entity(e1).remove::<Selected>();
+            commands.entity(e2).remove::<Selected>();
         }
 
         selected.0.clear();
     }
 }
 
-fn can_connect(board: &Board, t1: &Tile, t2: &Tile) -> bool {
-    can_connect_straight(board, t1, t2)
-        || can_connect_one_turn(board, t1, t2)
-        || can_connect_two_turn(board, t1, t2)
+fn can_connect(board: &Board, t1: &Tile, t2: &Tile) -> Option<Vec<(usize, usize)>> {
+    if can_connect_straight(board, t1, t2) {
+        return Some(vec![(t1.row, t1.col), (t2.row, t2.col)]);
+    }
+    if let Some(corner) = can_connect_one_turn(board, t1, t2) {
+        return Some(vec![(t1.row, t1.col), corner, (t2.row, t2.col)]);
+    }
+    if let Some((c1, c2)) = can_connect_two_turn(board, t1, t2) {
+        return Some(vec![(t1.row, t1.col), c1, c2, (t2.row, t2.col)]);
+    }
+    None
 }
 
 fn can_connect_straight(board: &Board, t1: &Tile, t2: &Tile) -> bool {
@@ -161,7 +191,7 @@ fn can_connect_straight(board: &Board, t1: &Tile, t2: &Tile) -> bool {
     false
 }
 
-fn can_connect_one_turn(board: &Board, t1: &Tile, t2: &Tile) -> bool {
+fn can_connect_one_turn(board: &Board, t1: &Tile, t2: &Tile) -> Option<(usize, usize)> {
     let corner1 = Tile {
         row: t1.row,
         col: t2.col,
@@ -177,20 +207,24 @@ fn can_connect_one_turn(board: &Board, t1: &Tile, t2: &Tile) -> bool {
         && can_connect_straight(board, t1, &corner1)
         && can_connect_straight(board, &corner1, t2)
     {
-        return true;
+        return Some((corner1.row, corner1.col));
     }
 
     if board.is_empty(corner2.row, corner2.col)
         && can_connect_straight(board, t1, &corner2)
         && can_connect_straight(board, &corner2, t2)
     {
-        return true;
+        return Some((corner2.row, corner2.col));
     }
 
-    false
+    None
 }
 
-fn can_connect_two_turn(board: &Board, t1: &Tile, t2: &Tile) -> bool {
+fn can_connect_two_turn(
+    board: &Board,
+    t1: &Tile,
+    t2: &Tile,
+) -> Option<((usize, usize), (usize, usize))> {
     // Scan all rows
     for r in 0..ROWS {
         let corner = Tile {
@@ -200,9 +234,9 @@ fn can_connect_two_turn(board: &Board, t1: &Tile, t2: &Tile) -> bool {
         };
         if board.is_empty(corner.row, corner.col)
             && can_connect_straight(board, t1, &corner)
-            && can_connect_one_turn(board, &corner, t2)
+            && can_connect_one_turn(board, &corner, t2).is_some()
         {
-            return true;
+            return Some(((t1.row, t1.col), (corner.row, corner.col)));
         }
     }
 
@@ -215,11 +249,95 @@ fn can_connect_two_turn(board: &Board, t1: &Tile, t2: &Tile) -> bool {
         };
         if board.is_empty(corner.row, corner.col)
             && can_connect_straight(board, t1, &corner)
-            && can_connect_one_turn(board, &corner, t2)
+            && can_connect_one_turn(board, &corner, t2).is_some()
         {
-            return true;
+            return Some(((t1.row, t1.col), (corner.row, corner.col)));
         }
     }
 
-    false
+    None
+}
+
+pub fn highlight_selected(mut q_tiles: Query<(&mut Sprite, Option<&Selected>), With<Tile>>) {
+    for (mut sprite, selected) in q_tiles.iter_mut() {
+        if selected.is_some() {
+            // Highlight = white border tint
+            sprite.color.set_alpha(0.6); // semi-transparent
+        } else {
+            // Normal = fully opaque
+            sprite.color.set_alpha(1.0);
+        }
+    }
+}
+
+fn spawn_line(commands: &mut Commands, start: Vec2, end: Vec2) {
+    let dir = end - start;
+    let length = dir.length();
+    let angle = dir.y.atan2(dir.x);
+
+    commands.spawn((
+        SpriteBundle {
+            sprite: Sprite {
+                color: Color::WHITE,
+                custom_size: Some(Vec2::new(length, 4.0)),
+                ..default()
+            },
+            transform: Transform {
+                translation: Vec3::new((start.x + end.x) / 2.0, (start.y + end.y) / 2.0, 1.0),
+                rotation: Quat::from_rotation_z(angle),
+                ..default()
+            },
+            ..default()
+        },
+        ConnectionLine,
+        LineTimer(Timer::from_seconds(0.1, TimerMode::Once)),
+    ));
+}
+
+pub fn cleanup_lines(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut q_lines: Query<(Entity, &mut LineTimer)>,
+) {
+    for (entity, mut timer) in q_lines.iter_mut() {
+        if timer.0.tick(time.delta()).finished() {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+fn cell_to_world(row: usize, col: usize, tile_size: f32) -> Vec2 {
+    Vec2::new(
+        col as f32 * tile_size - 400.0 + tile_size / 2.0, // adjust offset
+        300.0 - row as f32 * tile_size - tile_size / 2.0,
+    )
+}
+
+fn spawn_path(commands: &mut Commands, path: &[(usize, usize)], tile_size: f32) {
+    for w in path.windows(2) {
+        let start = cell_to_world(w[0].0, w[0].1, tile_size);
+        let end = cell_to_world(w[1].0, w[1].1, tile_size);
+
+        let dir = end - start;
+        let length = dir.length();
+        let angle = dir.y.atan2(dir.x);
+
+        commands.spawn((
+            SpriteBundle {
+                sprite: Sprite {
+                    color: Color::Srgba(YELLOW),
+                    custom_size: Some(Vec2::new(length, 4.0)),
+                    ..default()
+                },
+                transform: Transform {
+                    translation: Vec3::new((start.x + end.x) / 2.0, (start.y + end.y) / 2.0, 5.0),
+                    rotation: Quat::from_rotation_z(angle),
+                    ..default()
+                },
+                ..default()
+            },
+            ConnectionLine,
+            LineTimer(Timer::from_seconds(0.3, TimerMode::Once)),
+        ));
+    }
 }

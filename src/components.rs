@@ -6,3 +6,13 @@ pub struct Tile {
     pub col: usize,
     pub kind: u32, // Pokémon type ID
 }
+
+#[derive(Component)]
+pub struct Selected;
+
+#[derive(Component)]
+pub struct ConnectionLine;
+
+
+#[derive(Component)]
+pub struct LineTimer(pub Timer);
