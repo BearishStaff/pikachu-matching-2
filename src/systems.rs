@@ -1,4 +1,7 @@
-use bevy::{color::palettes::css::{BLUE, GREEN, ORANGE, RED, YELLOW}, prelude::*};
+use bevy::{
+    color::palettes::css::{BLUE, GREEN, ORANGE, RED, YELLOW},
+    prelude::*,
+};
 
 use crate::components::Tile;
 
@@ -44,6 +47,7 @@ pub struct SelectedTiles(Vec<Entity>);
 
 pub fn select_tile(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     mut selected: ResMut<SelectedTiles>,
     buttons: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window>,
@@ -67,7 +71,16 @@ pub fn select_tile(
                         && world_pos.y < tile_pos.y + half)
                     {
                         selected.0.push(entity);
-                        println!("Selected tile at ({}, {}) type {}", tile.row, tile.col, tile.kind);
+                        if selected.0.len() == 1 {
+                             commands.spawn(AudioBundle {
+                            source: asset_server.load("sounds/select.ogg"),
+                            settings: PlaybackSettings::ONCE,
+                        });
+                        }
+                        println!(
+                            "Selected tile at ({}, {}) type {}",
+                            tile.row, tile.col, tile.kind
+                        );
                     }
                 }
             }
@@ -77,6 +90,7 @@ pub fn select_tile(
 
 pub fn process_selection(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     mut selected: ResMut<SelectedTiles>,
     q_tiles: Query<(Entity, &Tile)>,
 ) {
@@ -87,14 +101,24 @@ pub fn process_selection(
         let t1 = q_tiles.get(e1).unwrap().1;
         let t2 = q_tiles.get(e2).unwrap().1;
 
-        if t1.kind == t2.kind && (t1.row != t2.row || t1.col != t2.col) {
+        if t1.kind == t2.kind && !(t1.row == t2.row && t1.col == t2.col) {
             // TODO: run connection check here
-            println!("Tiles match! ({}, {}) <-> ({}, {})", t1.row, t1.col, t2.row, t2.col);
-
+            println!(
+                "Tiles match! ({}, {}) <-> ({}, {})",
+                t1.row, t1.col, t2.row, t2.col
+            );
+            commands.spawn(AudioBundle {
+                            source: asset_server.load("sounds/matched.ogg"),
+                            settings: PlaybackSettings::ONCE,
+                        });
             commands.entity(e1).despawn();
             commands.entity(e2).despawn();
         } else {
-            println!("Tiles don't match");
+            if t1.row == t2.row && t1.col == t2.col {
+                println!("Unselect tile");
+            } else {
+                println!("Tiles don't match");
+            }
         }
 
         selected.0.clear();
