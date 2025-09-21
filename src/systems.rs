@@ -125,23 +125,24 @@ pub fn process_selection(
         let (entity1, t1, tf1) = q_tiles.get(e1).unwrap();
         let (entity2, t2, tf2) = q_tiles.get(e2).unwrap();
 
-        // if t1.kind == t2.kind {
-            if t1.kind == t2.kind  &&let Some(path) = can_connect(&board, t1, t2) {
-                println!("Tiles connect!");
+        if t1.kind == t2.kind
+            && let Some(path) = can_connect(&board, t1, t2)
+        {
+            println!("Tiles connect!");
 
-                // draw full path
-                spawn_path(&mut commands, &path, 64.0); // tile_size = 64
+            // draw full path
+            spawn_path(&mut commands, &path, 64.0); // tile_size = 64
 
-                commands.spawn(AudioBundle {
-                    source: asset_server.load("sounds/matched.ogg"),
-                    settings: PlaybackSettings::ONCE,
-                });
+            commands.spawn(AudioBundle {
+                source: asset_server.load("sounds/matched.ogg"),
+                settings: PlaybackSettings::ONCE,
+            });
 
-                commands.entity(entity1).despawn();
-                commands.entity(entity2).despawn();
-                board.cells[t1.row][t1.col] = None;
-                board.cells[t2.row][t2.col] = None;
-            // }
+            commands.entity(entity1).despawn();
+            commands.entity(entity2).despawn();
+            board.cells[t1.row][t1.col] = None;
+            board.cells[t2.row][t2.col] = None;
+
         } else {
             println!("Tiles cannot connect");
             commands.entity(e1).remove::<Selected>();
