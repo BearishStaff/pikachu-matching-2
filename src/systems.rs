@@ -1,11 +1,14 @@
 use bevy::{
-    audio::Volume, color::palettes::css::{BLUE, GREEN, ORANGE, RED, YELLOW}, prelude::*
+    audio::Volume,
+    color::palettes::css::{BLUE, GREEN, ORANGE, RED, YELLOW},
+    prelude::*,
 };
 
 use crate::components::ConnectionLine;
 use crate::components::LineTimer;
 use crate::components::Selected;
 use crate::components::Tile;
+use crate::components::PendingRemove;
 
 use crate::resources::Board;
 
@@ -137,8 +140,10 @@ pub fn process_selection(
                 settings: PlaybackSettings::ONCE,
             });
 
-            commands.entity(entity1).despawn();
-            commands.entity(entity2).despawn();
+            // instead of despawning now, just mark them
+            commands.entity(entity1).insert(PendingRemove);
+            commands.entity(entity2).insert(PendingRemove);
+
             board.cells[t1.row][t1.col] = None;
             board.cells[t2.row][t2.col] = None;
         } else {
@@ -269,18 +274,6 @@ pub fn highlight_selected(mut q_tiles: Query<(&mut Sprite, Option<&Selected>), W
     }
 }
 
-pub fn cleanup_lines(
-    mut commands: Commands,
-    time: Res<Time>,
-    mut q_lines: Query<(Entity, &mut LineTimer)>,
-) {
-    for (entity, mut timer) in q_lines.iter_mut() {
-        if timer.0.tick(time.delta()).finished() {
-            commands.entity(entity).despawn();
-        }
-    }
-}
-
 fn cell_to_world(row: usize, col: usize, tile_size: f32) -> Vec2 {
     // Example: board top-left = (-400, -300), tile_size = 64
     Vec2::new(
@@ -289,11 +282,7 @@ fn cell_to_world(row: usize, col: usize, tile_size: f32) -> Vec2 {
     )
 }
 
-pub fn spawn_path(
-    commands: &mut Commands,
-    path: &[(usize, usize)],
-    tile_size: f32,
-) {
+pub fn spawn_path(commands: &mut Commands, path: &[(usize, usize)], tile_size: f32) {
     for w in path.windows(2) {
         let start = cell_to_world(w[0].0, w[0].1, tile_size);
         let end = cell_to_world(w[1].0, w[1].1, tile_size);
@@ -327,6 +316,30 @@ pub fn spawn_path(
         ));
     }
 }
+
+pub fn cleanup_lines_and_tiles(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut q_lines: Query<(Entity, &mut LineTimer), With<ConnectionLine>>,
+    q_tiles: Query<Entity, With<PendingRemove>>,
+) {
+    let mut finished = false;
+
+    for (entity, mut timer) in q_lines.iter_mut() {
+        if timer.0.tick(time.delta()).finished() {
+            commands.entity(entity).despawn();
+            finished = true;
+        }
+    }
+
+    // if any line finished, remove all pending tiles
+    if finished {
+        for entity in q_tiles.iter() {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
 
 pub fn play_bgm(asset_server: Res<AssetServer>, mut commands: Commands) {
     commands.spawn(AudioBundle {

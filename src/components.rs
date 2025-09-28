@@ -16,3 +16,6 @@ pub struct ConnectionLine;
 
 #[derive(Component)]
 pub struct LineTimer(pub Timer);
+
+#[derive(Component)]
+pub struct PendingRemove;
