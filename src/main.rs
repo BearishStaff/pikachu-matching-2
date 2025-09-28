@@ -11,6 +11,7 @@ fn main() {
         .insert_resource(SelectedTiles::default())
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
+        .add_systems(Startup, play_bgm)
         .add_systems( Update ,select_tile)
         .add_systems(Update, highlight_selected)
         .add_systems( Update,process_selection)

@@ -1,6 +1,5 @@
 use bevy::{
-    color::palettes::css::{BLUE, GREEN, ORANGE, RED, YELLOW},
-    prelude::*,
+    audio::Volume, color::palettes::css::{BLUE, GREEN, ORANGE, RED, YELLOW}, prelude::*
 };
 
 use crate::components::ConnectionLine;
@@ -142,7 +141,6 @@ pub fn process_selection(
             commands.entity(entity2).despawn();
             board.cells[t1.row][t1.col] = None;
             board.cells[t2.row][t2.col] = None;
-
         } else {
             println!("Tiles cannot connect");
             commands.entity(e1).remove::<Selected>();
@@ -341,4 +339,11 @@ fn spawn_path(commands: &mut Commands, path: &[(usize, usize)], tile_size: f32) 
             LineTimer(Timer::from_seconds(0.3, TimerMode::Once)),
         ));
     }
+}
+
+pub fn play_bgm(asset_server: Res<AssetServer>, mut commands: Commands) {
+    commands.spawn(AudioBundle {
+        source: asset_server.load("bg_music.ogg"),
+        settings: PlaybackSettings::LOOP.with_volume(Volume::new(0.5)),
+    });
 }
