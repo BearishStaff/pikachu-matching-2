@@ -269,30 +269,6 @@ pub fn highlight_selected(mut q_tiles: Query<(&mut Sprite, Option<&Selected>), W
     }
 }
 
-fn spawn_line(commands: &mut Commands, start: Vec2, end: Vec2) {
-    let dir = end - start;
-    let length = dir.length();
-    let angle = dir.y.atan2(dir.x);
-
-    commands.spawn((
-        SpriteBundle {
-            sprite: Sprite {
-                color: Color::WHITE,
-                custom_size: Some(Vec2::new(length, 4.0)),
-                ..default()
-            },
-            transform: Transform {
-                translation: Vec3::new((start.x + end.x) / 2.0, (start.y + end.y) / 2.0, 1.0),
-                rotation: Quat::from_rotation_z(angle),
-                ..default()
-            },
-            ..default()
-        },
-        ConnectionLine,
-        LineTimer(Timer::from_seconds(0.1, TimerMode::Once)),
-    ));
-}
-
 pub fn cleanup_lines(
     mut commands: Commands,
     time: Res<Time>,
@@ -306,30 +282,41 @@ pub fn cleanup_lines(
 }
 
 fn cell_to_world(row: usize, col: usize, tile_size: f32) -> Vec2 {
+    // Example: board top-left = (-400, -300), tile_size = 64
     Vec2::new(
-        col as f32 * tile_size - 400.0 + tile_size / 2.0, // adjust offset
-        300.0 - row as f32 * tile_size - tile_size / 2.0,
+        col as f32 * tile_size - 350.0 + tile_size / 2.0,
+        row as f32 * tile_size - 250.0 + tile_size / 2.0,
     )
 }
 
-fn spawn_path(commands: &mut Commands, path: &[(usize, usize)], tile_size: f32) {
+pub fn spawn_path(
+    commands: &mut Commands,
+    path: &[(usize, usize)],
+    tile_size: f32,
+) {
     for w in path.windows(2) {
         let start = cell_to_world(w[0].0, w[0].1, tile_size);
         let end = cell_to_world(w[1].0, w[1].1, tile_size);
 
+        // difference vector
         let dir = end - start;
         let length = dir.length();
+
+        // midpoint between start & end
+        let mid = (start + end) / 2.0;
+
+        // angle in radians
         let angle = dir.y.atan2(dir.x);
 
         commands.spawn((
             SpriteBundle {
                 sprite: Sprite {
                     color: Color::Srgba(YELLOW),
-                    custom_size: Some(Vec2::new(length, 4.0)),
+                    custom_size: Some(Vec2::new(length, 4.0)), // thin horizontal bar
                     ..default()
                 },
                 transform: Transform {
-                    translation: Vec3::new((start.x + end.x) / 2.0, (start.y + end.y) / 2.0, 5.0),
+                    translation: Vec3::new(mid.x, mid.y, 5.0), // put above tiles
                     rotation: Quat::from_rotation_z(angle),
                     ..default()
                 },
